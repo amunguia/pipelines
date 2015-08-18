@@ -23,11 +23,14 @@ module Control.Concurrent.Pipeline (
     , waitOn
     , with
     , (&|)
+    , (&|!)
     , (&/)
+    , (&/!)
     ) where
 
 import Control.Concurrent.Async (Async, async, link, link2, wait)
 import Control.Concurrent.Chan
+import Control.Exception (handle)
 
 -- | Wraps an input item. Uses JobEnd to determine if job is complete.
 data JobResult a  = JobResult a | JobEnd 
@@ -93,6 +96,11 @@ multiSync syncs = do
     link2 asyn (startSync p)
     return $ makePipeline (startChan p) outChan (startSync p) asyn
 
+-- | Like &|, except that the function being appended to a pipeline
+--   does not run in IO.
+(&|!) :: IO (Pipeline c a) -> (a -> b) -> IO (Pipeline c b)
+(&|!) pipeline func = pipeline &| (return . func)
+
 -- | Intended to be followed by a call to with. Appends a new function
 --   to a pipeline. However, this does not start a job. Following with 
 --   a call to with starts the job running in the specified number of
@@ -104,8 +112,13 @@ multiSync syncs = do
 --       pipeline &/ f `with` 4
 --   This will append f to the pipeline and it will execute in 4
 --   threads.
-(&/) :: IO (Pipeline c a) -> (a -> b) -> (IO (Pipeline c a), a -> b)
+(&/) :: IO (Pipeline c a) -> (a -> IO b) -> (IO (Pipeline c a), a -> IO b)
 (&/) pipeline func = (pipeline, func)
+
+-- | Like &/, except that the function being appended to a pipeline
+--   does not run in IO.
+(&/!) :: IO (Pipeline c a) -> (a -> b) -> (IO (Pipeline c a), a -> IO b)
+(&/!) pipeline func = (pipeline, return . func)
 
 -- | Specifies how many threads to execute the last job in pipeline.
 with :: (IO (Pipeline c a), a -> IO b) ->  Int -> IO (Pipeline c b)
