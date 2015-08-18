@@ -1,0 +1,3 @@
+# Pipelines
+
+Pipelines is inspred by running a sequence of unix commands and piping the output from one to the input of the next.  As a Haskell library, Pipelines allows you to define a sequence of functions that successively transforms a stream of input data.  Each function, called a job, runs asyncrhonously in its own thread.  Each job can be run accross an arbitrary number of threads.  Exception handling is available at the pipeline level or at the level of a specific job. 
