@@ -18,4 +18,7 @@ source-repository head
 library
   exposed-modules:     Control.Concurrent.Pipeline
   default-language:    Haskell2010
+  build-depends:
+    base, 
+    async >= 2.0.1
   
