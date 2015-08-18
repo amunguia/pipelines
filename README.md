@@ -47,5 +47,5 @@ can be started to execute the expensive job.  In this case, each thread reads fr
 f :: a -> IO b
 g :: b -> IO c
 
-begin &| f &\ g `with` 3
+begin &| f &\ g `with` 3  :: Pipeline a c
 ```
