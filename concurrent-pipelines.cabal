@@ -1,0 +1,21 @@
+name:                concurrent-pipelines
+version:             0.1.0.0
+synopsis:            Execute a series of data processing tasks asynchronously.
+description: 
+  Pipelines is inspred by running a sequence of unix commands and piping the output from one to the input of the next.  As a Haskell library, Pipelines allows you to define a sequence of functions that successively transforms a stream of input data.  Each function, called a job, runs asyncrhonously in its own thread.  Each job can be run accross an arbitrary number of threads.         
+license:             MIT
+license-file:        LICENSE
+author:              Alejandro Munguia
+maintainer:          munguia.jandro@gmail.com
+category:            Concurrency
+build-type:          Simple
+extra-source-files:  README.md
+cabal-version:       >=1.10
+source-repository head
+  type: git
+  location: https://github.com/amunguia/concurrent-pipelines
+
+library
+  exposed-modules:     Control.Concurrent.Pipeline
+  default-language:    Haskell2010
+  
