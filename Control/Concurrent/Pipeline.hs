@@ -1,4 +1,19 @@
-module Pipeline (
+{-|
+Module      :  Control.Concurrent.Pipeline
+Copyright   :  (c) Alejandro Munguia 2015
+License     :  MIT (see the LICENSE file)
+Maintainer  :  munguia.jandro@gmail.com
+Stability   :  experimental
+Portability :  portable
+
+A Pipeline is a sequence of functions that successively transforms a 
+stream of input data.  Each function runs asynchronously.  Additionally,
+it is possible to execute a given  function accross any number of threads.
+
+
+-}
+
+module Control.Concurrent.Pipeline (
       begin
     , beginWithChan
     , end
@@ -17,14 +32,16 @@ import Control.Concurrent.Chan
 -- | Wraps an input item. Uses JobEnd to determine if job is complete.
 data JobResult a  = JobResult a | JobEnd 
 
+-- | A job in a pipeline is an input channel, an output channel, and a
+--   function to transform data as it moves from the first to the second.
+data Job  a b  = Job {
+                 job        :: a -> IO b
+               , inchan     :: Chan (JobResult a)
+               , outchan    :: Chan (JobResult b) 
+               } 
 
-data Runner  a b  = Runner {
-                    job        :: a -> IO b
-                  , inchan     :: Chan (JobResult a)
-                  , outchan    :: Chan (JobResult b) 
-                  } 
-
--- | 
+-- | A sequence of jobs to run asynchronously. The first job has type a, 
+--   the final job has type b.
 data Pipeline a b  = Pipeline {
                      startChan :: Chan (JobResult a) 
                    , endChan   :: Chan (JobResult b)
@@ -32,19 +49,19 @@ data Pipeline a b  = Pipeline {
                    , endSync   :: Async ()
                    }
 
--- | Runs the job specified by the runner. Returns if JobEnd is read from the 
---   input channel.
-exec :: Runner a b -> IO ()
-exec runner = do
-    a <- readChan $ inchan runner
+-- | Runs the function specified by the job on one input. Returns if JobEnd is read 
+--   from the input channel.
+exec :: Job a b -> IO ()
+exec j = do
+    a <- readChan $ inchan j
     case a of 
         JobResult a' -> do
-            b <- (job runner) a'
-            writeChan (outchan runner) (JobResult b)
-            exec runner 
+            b <- (job j) a'
+            writeChan (outchan j) (JobResult b)
+            exec j 
         JobEnd -> do
-            writeChan (inchan runner) JobEnd  -- in case multiple readers
-            writeChan (outchan runner) JobEnd -- pass JobEnd signal
+            writeChan (inchan j) JobEnd  -- in case multiple readers
+            writeChan (outchan j) JobEnd -- pass JobEnd signal
             return () 
 
 -- | Move values from one channel to another, wrapping in JobResult in the process.
@@ -65,13 +82,14 @@ multiSync syncs = do
     sequence_ $ fmap wait syncs
     return ()
 
--- | Appends a new job to a pipeline.
+-- | Appends a new job to a pipeline.  Begins executing the new job
+--   in a seperate thread.
 (&|) :: IO (Pipeline c a) -> (a -> IO b) -> IO (Pipeline c b)
 (&|) pipeline func = do 
-    p          <- pipeline
-    outChan    <- newChan
-    let runner = Runner {job=func, inchan=(endChan p), outchan=outChan}
-    asyn       <- async $ exec runner
+    p        <- pipeline
+    outChan  <- newChan
+    let job  = Job {job=func, inchan=(endChan p), outchan=outChan}
+    asyn     <- async $ exec job
     link2 asyn (startSync p)
     return $ makePipeline (startChan p) outChan (startSync p) asyn
 
@@ -79,17 +97,24 @@ multiSync syncs = do
 --   to a pipeline. However, this does not start a job. Following with 
 --   a call to with starts the job running in the specified number of
 --   threads.
+--
+--   Example usage:
+--       pipeline :: IO (Pipeline c a)
+--       f        :: a -> b
+--       pipeline &/ f `with` 4
+--   This will append f to the pipeline and it will execute in 4
+--   threads.
 (&/) :: IO (Pipeline c a) -> (a -> b) -> (IO (Pipeline c a), a -> b)
 (&/) pipeline func = (pipeline, func)
 
 -- | Specifies how many threads to execute the last job in pipeline.
 with :: (IO (Pipeline c a), a -> IO b) ->  Int -> IO (Pipeline c b)
 with (pipeline, func) num = do
-    p          <- pipeline
-    outChan    <- newChan
-    let runner = Runner {job=func, inchan=(endChan p), outchan=outChan}
-    asyns      <- sequence $ fmap (async . exec) $ replicate num runner
-    asyn       <- async $ multiSync asyns
+    p       <- pipeline
+    outChan <- newChan
+    let job = Job {job=func, inchan=(endChan p), outchan=outChan}
+    asyns   <- sequence $ fmap (async . exec) $ replicate num job
+    asyn    <- async $ multiSync asyns
     link2 asyn (startSync p)
     return $ makePipeline (startChan p) outChan (startSync p) asyn
 
