@@ -9,8 +9,6 @@ Portability :  portable
 A Pipeline is a sequence of functions that successively transforms a 
 stream of input data.  Each function runs asynchronously.  Additionally,
 it is possible to execute a given  function accross any number of threads.
-
-
 -}
 
 module Control.Concurrent.Pipeline (
@@ -30,9 +28,9 @@ module Control.Concurrent.Pipeline (
 
 import Control.Concurrent.Async (Async, async, link, link2, wait)
 import Control.Concurrent.Chan
-import Control.Exception (handle)
+import Control.Exception (Exception, catch)
 
--- | Wraps an input item. Uses JobEnd to determine if job is complete.
+-- | Wraps an input item. Uses JobEnd to determine if a pipeline is being closed.
 data JobResult a  = JobResult a | JobEnd 
 
 -- | A job in a pipeline is an input channel, an output channel, and a
@@ -53,7 +51,7 @@ data Pipeline a b  = Pipeline {
                    }
 
 -- | Runs the function specified by the job on one input. Returns if JobEnd is read 
---   from the input channel.
+--   from the input channel, otherwise repeats for next item.
 exec :: Job a b -> IO ()
 exec j = do
     a <- readChan $ inchan j
@@ -109,7 +107,8 @@ multiSync syncs = do
 --   Example usage:
 --       pipeline :: IO (Pipeline c a)
 --       f        :: a -> b
---       pipeline &/ f `with` 4
+--       pipeline &/ f `with` 4  :: IO (Pipeline c b)
+--
 --   This will append f to the pipeline and it will execute in 4
 --   threads.
 (&/) :: IO (Pipeline c a) -> (a -> IO b) -> (IO (Pipeline c a), a -> IO b)
@@ -152,6 +151,10 @@ end pipeline = writeChan (startChan pipeline) JobEnd >> (return pipeline)
 endAndWait :: Pipeline a b -> IO (Pipeline a b)
 endAndWait pipeline = end pipeline >>= waitOn
 
+-- | Blocks until the pipeline has completed execution
+waitOn :: Pipeline a b -> IO (Pipeline a b)
+waitOn pipeline = wait (endSync pipeline) >> (return pipeline) 
+
 -- | Insert an item into the pipeline
 input :: Pipeline a b -> a -> IO (Pipeline a b)
 input pipeline a = writeChan (startChan pipeline) (JobResult a) >> (return pipeline)
@@ -165,7 +168,10 @@ output pipeline = do
         JobResult b -> return $ Just b
         JobEnd      -> return Nothing
 
--- | Blocks until the pipeline has completed execution
-waitOn :: Pipeline a b -> IO (Pipeline a b)
-waitOn pipeline = wait (endSync pipeline) >> (return pipeline) 
+withMonitor :: Exception e => IO (Pipeline a b) -> (e -> IO ()) -> IO (Pipeline a b)
+withMonitor pipeline monitor = do
+    p   <- pipeline
+    asyn <- async $ (wait (endSync p)) `catch` monitor
+    return p
+
 

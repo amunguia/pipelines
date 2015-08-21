@@ -1,6 +1,8 @@
 # Pipelines
 
-Pipelines is inspred by running a sequence of unix commands and piping the output from one to the input of the next.  As a Haskell library, Pipelines allows you to define a sequence of functions that successively transforms a stream of input data.  Each function, called a job, runs asyncrhonously in its own thread.  Each job can be run accross an arbitrary number of threads.  Exception handling is available at the pipeline level or at the level of a specific job. 
+## In Development
+
+Pipelines is inspred by running a sequence of unix commands and piping the output from one to the input of the next.  As a Haskell library, Pipelines allows you to define a sequence of functions that successively transforms a stream of input data.  Each function, called a job, runs asyncrhonously in its own thread.  Each job can be run accross an arbitrary number of threads. 
 
 ## Getting Started
 
@@ -27,7 +29,7 @@ To create a pipeline use one of:
 ```haskell
 begin :: IO (Pipeline a a)
 
--- With an existing Control.Concurrent.Chan
+-- With an existing Control.Concurrent.Chan as input into the pipeline
 beginWithChan :: Chan a -> IO (Pipeline a a) 
 ```
 
@@ -40,8 +42,7 @@ g :: b -> c
 begin &| f &|! g :: Pipeline a c
 ```
 
-If a job 'g' is more computationally expensive than a job 'f', multiple threads
-can be started to execute the expensive job.  In this case, each thread reads from the same input channel and writes to the same output channel with multiple threads processing the same stage.
+It is possible to process a job in multiple threads.  In this case, each thread reads from the same input channel and writes to the same output channel. However, no guarantee is made of the outputs of job 'g' maintaining the input order.
 
 ```haskell
 f :: a -> IO b
@@ -49,3 +50,4 @@ g :: b -> IO c
 
 begin &| f &\ g `with` 3  :: Pipeline a c
 ```
+
