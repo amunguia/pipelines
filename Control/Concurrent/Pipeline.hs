@@ -85,8 +85,8 @@ multiSync syncs = do
 
 -- | Appends a new job to a pipeline.  Begins executing the new job
 --   in a seperate thread.
-(&|) :: IO (Pipeline c a) -> (a -> IO b) -> IO (Pipeline c b)
-(&|) pipeline func = do 
+(&|!) :: IO (Pipeline c a) -> (a -> IO b) -> IO (Pipeline c b)
+(&|!) pipeline func = do 
     p        <- pipeline
     outChan  <- newChan
     let job  = Job {job=func, inchan=(endChan p), outchan=outChan}
@@ -96,8 +96,8 @@ multiSync syncs = do
 
 -- | Like &|, except that the function being appended to a pipeline
 --   does not run in IO.
-(&|!) :: IO (Pipeline c a) -> (a -> b) -> IO (Pipeline c b)
-(&|!) pipeline func = pipeline &| (return . func)
+(&|) :: IO (Pipeline c a) -> (a -> b) -> IO (Pipeline c b)
+(&|) pipeline func = pipeline &|! (return . func)
 
 -- | Intended to be followed by a call to with. Appends a new function
 --   to a pipeline. However, this does not start a job. Following with 
@@ -111,13 +111,13 @@ multiSync syncs = do
 --
 --   This will append f to the pipeline and it will execute in 4
 --   threads.
-(&/) :: IO (Pipeline c a) -> (a -> IO b) -> (IO (Pipeline c a), a -> IO b)
-(&/) pipeline func = (pipeline, func)
+(&/!) :: IO (Pipeline c a) -> (a -> IO b) -> (IO (Pipeline c a), a -> IO b)
+(&/!) pipeline func = (pipeline, func)
 
 -- | Like &/, except that the function being appended to a pipeline
 --   does not run in IO.
-(&/!) :: IO (Pipeline c a) -> (a -> b) -> (IO (Pipeline c a), a -> IO b)
-(&/!) pipeline func = (pipeline, return . func)
+(&/) :: IO (Pipeline c a) -> (a -> b) -> (IO (Pipeline c a), a -> IO b)
+(&/) pipeline func = (pipeline, return . func)
 
 -- | Specifies how many threads to execute the last job in pipeline.
 with :: (IO (Pipeline c a), a -> IO b) ->  Int -> IO (Pipeline c b)
