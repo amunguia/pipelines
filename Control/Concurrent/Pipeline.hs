@@ -24,6 +24,7 @@ module Control.Concurrent.Pipeline (
     , (&|!)
     , (&/)
     , (&/!)
+    , (>=>)
     ) where
 
 import Control.Concurrent.Async (Async, async, link, link2, wait)
@@ -82,6 +83,15 @@ multiSync syncs = do
     sequence_ $ fmap link syncs
     sequence_ $ fmap wait syncs
     return ()
+
+-- | Moves values from chan to another. Terminating on JobEnd signal.
+shovel :: Chan (JobResult a) -> Chan (JobResult a) -> Async () -> IO ()
+shovel from to sync = do 
+    link sync
+    next <- readChan from
+    case next of 
+        JobResult a -> writeChan to (JobResult a) >> shovel from to
+        JobEnd      -> writeChan to JobEnd >> return ()
 
 -- | Appends a new job to a pipeline.  Begins executing the new job
 --   in a seperate thread.
@@ -154,6 +164,13 @@ endAndWait pipeline = end pipeline >>= waitOn
 -- | Blocks until the pipeline has completed execution
 waitOn :: Pipeline a b -> IO (Pipeline a b)
 waitOn pipeline = wait (endSync pipeline) >> (return pipeline) 
+
+-- | Combines two pipelines into a larger pipeline.
+(>=>) :: Pipeline a b -> Pipeline b c -> IO (Pipeline a c)
+(>=>) pipeline1 pipeline2 = do 
+    async $ shovel (endChan pipeline1) (startChan pipeline2) (startSync pipeline1)
+    return $ makePipeline (startChan pipeline1) (endChan pipeline2) (startSync pipeline1) (endSync pipeline2)
+
 
 -- | Insert an item into the pipeline
 input :: Pipeline a b -> a -> IO (Pipeline a b)
