@@ -8,6 +8,7 @@ module Control.Concurrent.Pipelines.Internal
     , makePipeline
     , multiSync
     , shovel
+    , shovel2
     ) where
 
 import Control.Concurrent.Chan 
@@ -73,5 +74,17 @@ shovel from to sync = do
     next <- readChan from
     case next of 
         JobResult a -> writeChan to (JobResult a) >> shovel from to sync
-
         JobEnd      -> writeChan to JobEnd >> return ()
+
+shovel2 :: Chan (JobResult a) -> Chan (JobResult a) -> Chan (JobResult a) -> Async () -> IO ()
+shovel2 from to1 to2 sync = do
+    link sync
+    next <- readChan from
+    case next of 
+        JobResult a -> writeChan to1 (JobResult a) >> 
+                           writeChan to2 (JobResult a) >> 
+                           shovel2 from to1 to2 sync
+        JobEnd      -> writeChan to1 JobEnd >> 
+                           writeChan to2 JobEnd >>  
+                           return ()
+

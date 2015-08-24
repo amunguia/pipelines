@@ -4,11 +4,10 @@ module Control.Concurrent.Pipelines.Combinators (
     , (&/!)
     , (&/)
     , (>=>)
-    , (>=<)
     , with
     , withMonitor
     ) where
-
+import Control.Applicative ((<$>))
 import Control.Concurrent.Async (async, link2, wait)
 import Control.Concurrent.Chan
 import Control.Exception (Exception, catch)
@@ -63,24 +62,16 @@ with (pipeline, func) num = do
     return $ makePipeline (startChan p) outChan (startSync p) asyn
     
 -- | Combines two pipelines into a larger pipeline.
-(>=>) :: Pipeline a b -> Pipeline b c -> IO (Pipeline a c)
+(>=>) :: IO (Pipeline a b) -> IO (Pipeline b c) -> IO (Pipeline a c)
 (>=>) pipeline1 pipeline2 = do 
-    async $ shovel (endChan pipeline1) (startChan pipeline2) (startSync pipeline1)
-    return $ makePipeline (startChan pipeline1) (endChan pipeline2) (startSync pipeline1) (endSync pipeline2)
-
--- | Branching operator. Ouput form the first pipeline is dupicated and sent through to
---   the other two pipelines.
-(>=<) :: Pipeline a b -> Pipeline b c -> Pipeline b c -> IO ((Pipeline a c, Pipeline a c))
-(>=<) startPipeline endPipeline1 endPipeline2 = do 
-    dupedOut <- dupChan $ endChan startPipeline
-    async $ shovel (endChan startPipeline) (startChan endPipeline1) (startSync startPipeline)
-    async $ shovel dupedOut (startChan endPipeline2) (startSync startPipeline)
-    let pipeline1 = makePipeline (startChan startPipeline) (endChan endPipeline1) (startSync startPipeline) (endSync endPipeline1)
-    let pipeline2 = makePipeline (startChan startPipeline) (endChan endPipeline2) (startSync startPipeline) (endSync endPipeline2)
-    return (pipeline1, pipeline2)
+    p1 <- pipeline1
+    p2 <- pipeline2
+    async $ shovel (endChan p1) (startChan p2) (startSync p1)
+    return $ makePipeline (startChan p1) (endChan p2) (startSync p1) (endSync p2)
 
 withMonitor :: Exception e => IO (Pipeline a b) -> (e -> IO ()) -> IO (Pipeline a b)
 withMonitor pipeline monitor = do
     p   <- pipeline
     asyn <- async $ (wait (endSync p)) `catch` monitor
     return p
+

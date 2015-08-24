@@ -26,7 +26,6 @@ module Control.Concurrent.Pipeline (
     , (&/)
     , (&/!)
     , (>=>)
-    , (>=<)
     ) where
 
 import Control.Concurrent.Pipelines.Combinators
